@@ -249,6 +249,7 @@ export default function Home() {
   function selectAddress(item: any, type: 'origen' | 'destino') {
     const lat = parseFloat(item.lat);
     const lng = parseFloat(item.lon);
+    const willHaveBoth = type === 'origen' ? !!destinRef.current : !!origeRef.current;
     if (type === 'origen') {
       setOrigen({ lat, lng, address: item.display_name });
       setOrigenInput(item.display_name);
@@ -259,6 +260,7 @@ export default function Home() {
       setShowDestinoDD(false);
     }
     mapInstance.current?.setView([lat, lng], 16);
+    if (willHaveBoth) setTimeout(fetchCotizacion, 100);
   }
 
   // Geolocation
@@ -269,6 +271,7 @@ export default function Home() {
       (pos) => {
         setLocating(null);
         const { latitude: lat, longitude: lng } = pos.coords;
+        const willHaveBoth = target === 'origen' ? !!destinRef.current : !!origeRef.current;
         if (target === 'origen') {
           setOrigen({ lat, lng, address: 'Tu ubicación actual' });
           setOrigenInput('Tu ubicación actual');
@@ -279,6 +282,7 @@ export default function Home() {
           reverseGeocodeRef.current(lat, lng, 'destino');
         }
         mapInstance.current?.setView([lat, lng], 16);
+        if (willHaveBoth) setTimeout(fetchCotizacion, 100);
       },
       () => { setLocating(null); setError('No se pudo obtener tu ubicación.'); },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -338,6 +342,7 @@ export default function Home() {
       const { lat, lon, display_name } = data[0];
       const pt = { lat: parseFloat(lat), lng: parseFloat(lon), address: display_name };
       const target = clickModeRef.current;
+      const willHaveBoth = target === 'origen' ? !!destinRef.current : !!origeRef.current;
       if (target === 'origen') {
         setOrigen(pt);
         setOrigenInput(display_name);
@@ -350,6 +355,7 @@ export default function Home() {
         clickModeRef.current = 'origen';
       }
       mapInstance.current?.setView([parseFloat(lat), parseFloat(lon)], 15);
+      if (willHaveBoth) setTimeout(fetchCotizacion, 100);
     } catch {}
     setZonasLoading(null);
   }
