@@ -76,7 +76,7 @@ export default function Home() {
     const map = L.map(mapRef.current, {
       zoomControl: false,
       attributionControl: false,
-    }).setView([-12.0464, -77.0428], 14);
+    }).setView([10.1621, -68.0070], 14);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
@@ -445,6 +445,10 @@ export default function Home() {
                 placeholder="Buscar dirección o toca el mapa..."
                 className={`w-full p-2.5 border rounded-xl outline-none text-sm focus:border-[#c9a94e] focus:ring-3 focus:ring-[#ead189]/30 bg-white transition-all ${origen ? 'border-green-400' : 'border-gray-300'}`} />
               {searchingOrigen && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#c9a94e] animate-pulse">⏳</span>}
+              {origenInput && !searchingOrigen && (
+                <button onClick={() => { setOrigen(null); setOrigenInput(''); setShowOrigenDD(false); setClickMode('origen'); clickModeRef.current = 'origen'; }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-red-500 transition-colors">✕</button>
+              )}
               {showOrigenDD && <Dropdown items={origenDropdown} onSelect={(item) => selectAddress(item, 'origen')} />}
             </div>
           </div>
@@ -464,6 +468,10 @@ export default function Home() {
                 placeholder="Buscar dirección o toca el mapa..."
                 className={`w-full p-2.5 border rounded-xl outline-none text-sm focus:border-[#c9a94e] focus:ring-3 focus:ring-[#ead189]/30 bg-white transition-all ${destino ? 'border-green-400' : 'border-gray-300'}`} />
               {searchingDestino && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#c9a94e] animate-pulse">⏳</span>}
+              {destinoInput && !searchingDestino && (
+                <button onClick={() => { setDestino(null); setDestinoInput(''); setShowDestinoDD(false); setClickMode('destino'); clickModeRef.current = 'destino'; }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-red-500 transition-colors">✕</button>
+              )}
               {showDestinoDD && <Dropdown items={destinoDropdown} onSelect={(item) => selectAddress(item, 'destino')} />}
             </div>
           </div>
