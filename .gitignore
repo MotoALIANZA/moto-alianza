@@ -22,3 +22,5 @@ Thumbs.db
 *.pyc
 __pycache__/
 *.sqlite3
+
+.vercel
