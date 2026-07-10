@@ -374,17 +374,13 @@ export default function Home() {
   async function registrarPedido() {
     if (!cotizacion || !SHEET_URL) return;
     try {
-      await fetch(SHEET_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cliente: clienteNombre.trim(),
-          numero: clienteTelefono.trim(),
-          precio: cotizacion.precio_usd.toFixed(2),
-          fecha: new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' }),
-        }),
+      const p = new URLSearchParams({
+        cliente: clienteNombre.trim(),
+        numero: clienteTelefono.trim(),
+        precio: cotizacion.precio_usd.toFixed(2),
+        fecha: new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' }),
       });
+      await fetch(`${SHEET_URL}?${p}`, { method: 'GET', mode: 'no-cors' });
     } catch {}
   }
   const [copied, setCopied] = useState(false);
