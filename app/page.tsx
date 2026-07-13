@@ -78,8 +78,9 @@ export default function Home() {
       attributionControl: false,
     }).setView([10.1621, -68.0070], 14);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
     }).addTo(map);
 
     map.on('click', (e: any) => {
@@ -378,7 +379,7 @@ export default function Home() {
         cliente: clienteNombre.trim(),
         numero: clienteTelefono.trim(),
         precio: cotizacion.precio_usd.toFixed(2),
-        fecha: new Date().toLocaleString('es-VE', { timeZone: 'America/Caracas' }),
+        fecha: new Date().toLocaleDateString('es-VE', { timeZone: 'America/Caracas' }),
       });
       await fetch(`${SHEET_URL}?${p}`, { method: 'GET', mode: 'no-cors' });
     } catch {}
