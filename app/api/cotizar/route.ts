@@ -55,33 +55,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Faltan coordenadas' }, { status: 400 });
   }
 
-  // OSRM
-  let osrmData: any;
+  // GraphHopper
+  const GH_KEY = process.env.GRAPHHOPPER_KEY || 'd9b7a161-8575-43c5-9d4f-a89ee501225e';
+  let ghData: any;
   try {
-    const osrmUrl =
-      `http://router.project-osrm.org/route/v1/driving/` +
-      `${lon_origen},${lat_origen};${lon_destino},${lat_destino}` +
-      `?overview=full&geometries=geojson`;
-    const resp = await fetch(osrmUrl, { signal: AbortSignal.timeout(10000) });
-    osrmData = await resp.json();
+    const ghUrl =
+      `https://graphhopper.com/api/1/route?` +
+      `point=${lat_origen},${lon_origen}&point=${lat_destino},${lon_destino}` +
+      `&vehicle=car&locale=es&instructions=false&points_encoded=false&key=${GH_KEY}`;
+    const resp = await fetch(ghUrl, { signal: AbortSignal.timeout(10000) });
+    ghData = await resp.json();
   } catch {
     return NextResponse.json({ error: 'Error al calcular la ruta' }, { status: 502 });
   }
 
-  const route = osrmData?.routes?.[0];
+  const route = ghData?.paths?.[0];
   if (!route) {
     return NextResponse.json({ error: 'No se encontró ruta' }, { status: 502 });
   }
 
   const distancia_metros: number = route.distance;
-  const duracion_segundos: number = route.duration;
-  const route_geometry = route.geometry;
+  const duracion_segundos: number = route.time / 1000;
+  const route_geometry = route.points;
 
   const distancia_km = Math.round((distancia_metros / 1000) * 100) / 100;
   const duracion_minutos = Math.round(duracion_segundos / 60);
 
   const precio_km = PRECIO_POR_KM[tipo_servicio] ?? 0.30;
-  const precio_usd = Math.round((1.0 + precio_km * distancia_km) * 100) / 100;
+  let precio_usd = Math.round((0.50 + precio_km * distancia_km) * 100) / 100;
+  if (precio_usd < 1.0) precio_usd = 1.0;
 
   const tasaInfo = await obtenerTasa();
   const tasa_bs = tasaInfo?.tasa_bs ?? null;

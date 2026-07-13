@@ -604,7 +604,7 @@ export default function Home() {
           <p className="text-[#4a3822] text-xs uppercase tracking-wider mb-1">Tu cotización</p>
           <div className="text-3xl font-bold text-[#1c1913] mb-1">${cotizacion.precio_usd.toFixed(2)}</div>
           {cotizacion.precio_bs != null && <div className="text-lg font-semibold text-[#4a3822] mb-1">Bs. {formatBs(cotizacion.precio_bs)}</div>}
-          <div className="text-[11px] text-[#6b5a3e] mb-2">$1.00 base + ${cotizacion.precio_km.toFixed(2)}/km × {cotizacion.distancia_km} km = ${cotizacion.precio_usd.toFixed(2)}</div>
+          <div className="text-[11px] text-[#6b5a3e] mb-2">$0.50 base + ${cotizacion.precio_km.toFixed(2)}/km × {cotizacion.distancia_km} km = ${cotizacion.precio_usd.toFixed(2)}</div>
           <div className="flex justify-center gap-4 text-sm text-[#4a3822] mb-3">
             <span>📏 {cotizacion.distancia_km} km</span>
             <span>⏱ {formatTiempo(cotizacion.duracion_minutos)}</span>
