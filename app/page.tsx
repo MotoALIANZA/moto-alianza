@@ -372,6 +372,30 @@ export default function Home() {
   }
 
   const waDisabled = !(clienteNombre.trim() && clienteTelefono.trim());
+  async function handlePasteMaps(target: 'origen' | 'destino') {
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      let lat: number | null = null, lng: number | null = null, query = '';
+      const m1 = text.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+      const m2 = text.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+      const m3 = text.match(/maps\.google\.com\/maps\/?\?.*q=([^&]+)/);
+      if (m1) { lat = parseFloat(m1[1]); lng = parseFloat(m1[2]); }
+      else if (m2) { lat = parseFloat(m2[1]); lng = parseFloat(m2[2]); }
+      else if (m3) { query = decodeURIComponent(m3[1]); }
+      if (lat !== null && lng !== null) {
+        const r = await fetch(`${NOMINATIM_URL}/reverse?lat=${lat}&lon=${lng}&format=json`);
+        const d = await r.json();
+        const addr = d.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        const p = { lat, lng, address: addr };
+        if (target === 'origen') { setOrigen(p); setOrigenInput(addr); setClickMode('destino'); clickModeRef.current = 'destino'; }
+        else { setDestino(p); setDestinoInput(addr); setClickMode('origen'); clickModeRef.current = 'origen'; }
+        mapInstance.current?.setView([lat, lng], 16);
+      } else if (query) {
+        handleSearchInput(query, target);
+      }
+    } catch {}
+  }
+
   async function registrarPedido() {
     if (!cotizacion || !SHEET_URL) return;
     try {
@@ -458,6 +482,7 @@ export default function Home() {
           <button onClick={() => setCurrentLocation('origen')} className="btn-location relative" disabled={locating === 'origen'}>
             {locating === 'origen' ? <span className="inline-block animate-spin">⏳</span> : '📍'} Actual
           </button>
+          <button onClick={() => handlePasteMaps('origen')} className="btn-location" title="Pegar link de Google Maps">🔗 Maps</button>
         </div>
       </div>
 
@@ -481,6 +506,7 @@ export default function Home() {
           <button onClick={() => setCurrentLocation('destino')} className="btn-location relative" disabled={locating === 'destino'}>
             {locating === 'destino' ? <span className="inline-block animate-spin">⏳</span> : '📍'} Actual
           </button>
+          <button onClick={() => handlePasteMaps('destino')} className="btn-location" title="Pegar link de Google Maps">🔗 Maps</button>
         </div>
       </div>
 
