@@ -140,6 +140,7 @@ export default function Home() {
         setClickMode('origen');
         clickModeRef.current = 'origen';
       }
+      limpiarCotizacion();
       recalcularSiAmbos.current();
     });
 
@@ -214,6 +215,7 @@ export default function Home() {
         const p = markerOrigen.current.getLatLng();
         setOrigen({ lat: p.lat, lng: p.lng, address: origen.address });
         reverseGeocodeRef.current(p.lat, p.lng, 'origen');
+        limpiarCotizacion();
         autoRecalcularRef.current();
       });
     }
@@ -230,6 +232,7 @@ export default function Home() {
         const p = markerDestino.current.getLatLng();
         setDestino({ lat: p.lat, lng: p.lng, address: destino.address });
         reverseGeocodeRef.current(p.lat, p.lng, 'destino');
+        limpiarCotizacion();
         autoRecalcularRef.current();
       });
     }
@@ -266,6 +269,18 @@ export default function Home() {
   autoRecalcularRef.current = () => {
     if (origeRef.current && destinRef.current) {
       fetchCotRef.current();
+    }
+  };
+
+  // Limpiar cotización/resultado al cambiar origen o destino (evita tarifa anterior obsoleta)
+  const limpiarCotizacion = () => {
+    setCotizacion(null);
+    setCotizacionActiva(false);
+    setError('');
+    const L = getL();
+    if (L && mapInstance.current && routeLine.current) {
+      mapInstance.current.removeLayer(routeLine.current);
+      routeLine.current = null;
     }
   };
 
@@ -315,6 +330,7 @@ export default function Home() {
       setShowDestinoDD(false);
     }
     mapInstance.current?.setView([lat, lng], 16);
+    limpiarCotizacion();
     recalcularSiAmbos.current();
   }
 
@@ -336,6 +352,7 @@ export default function Home() {
           reverseGeocodeRef.current(lat, lng, 'destino');
         }
         mapInstance.current?.setView([lat, lng], 16);
+        limpiarCotizacion();
         recalcularSiAmbos.current();
       },
       () => { setLocating(null); setError('No se pudo obtener tu ubicación.'); },
@@ -412,6 +429,7 @@ export default function Home() {
         clickModeRef.current = 'origen';
       }
       mapInstance.current?.setView([parseFloat(lat), parseFloat(lon)], 15);
+      limpiarCotizacion();
       recalcularSiAmbos.current();
     } catch {}
     setZonasLoading(null);
@@ -446,6 +464,7 @@ export default function Home() {
         if (target === 'origen') { setOrigen(p); setOrigenInput(addr); setClickMode('destino'); clickModeRef.current = 'destino'; }
         else { setDestino(p); setDestinoInput(addr); setClickMode('origen'); clickModeRef.current = 'origen'; }
         mapInstance.current?.setView([lat, lng], 16);
+        limpiarCotizacion();
         recalcularSiAmbos.current();
       } else if (query) {
         handleSearchInput(query, target);
