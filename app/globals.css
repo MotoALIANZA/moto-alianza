@@ -5,6 +5,15 @@
 body {
   position: relative;
   background-color: #6b7280;
+  transition: background-color 0.8s ease;
+}
+
+body.noche {
+  background-color: #0f0d0a;
+}
+
+body.noche::before {
+  opacity: 0.08;
 }
 
 body::before {

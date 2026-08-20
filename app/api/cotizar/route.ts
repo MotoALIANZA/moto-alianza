@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
+import { obtenerTarifaInterna } from '@/lib/zonas';
+import { esNoche } from '@/lib/horario';
 
 const PRECIO_POR_KM: Record<string, number> = {
   moto: 0.30,
   delivery: 0.25,
   encomienda: 0.50,
 };
+
+const TARIFA_MINIMA = 1.7;      // mínima general diurna
+const FACTOR_NOCTURNO = 1.2;    // +20% en horario nocturno
 
 const SERVICE_LABELS: Record<string, string> = {
   moto: '🚲 Mototaxi',
@@ -82,8 +87,22 @@ export async function POST(request: Request) {
   const duracion_minutos = Math.round(duracion_segundos / 60);
 
   const precio_km = PRECIO_POR_KM[tipo_servicio] ?? 0.30;
-  let precio_usd = Math.round((0.50 + precio_km * distancia_km) * 100) / 100;
-  if (precio_usd < 1.0) precio_usd = 1.0;
+  const tarifaInterna = obtenerTarifaInterna(lat_origen, lon_origen, lat_destino, lon_destino);
+  const noche = esNoche();
+
+  let precio_usd = 0;
+  let detalle_precio = '';
+  if (tarifaInterna) {
+    precio_usd = noche ? tarifaInterna.tarifa_interna_noche : tarifaInterna.tarifa_interna;
+    detalle_precio = `Tarifa interna ${tarifaInterna.nombre}: $${precio_usd.toFixed(2)}${noche ? ' (nocturna)' : ''}`;
+  } else {
+    let base = 0.50 + precio_km * distancia_km;
+    if (noche) base = base * FACTOR_NOCTURNO;
+    precio_usd = Math.round(base * 100) / 100;
+    const minima = noche ? TARIFA_MINIMA * FACTOR_NOCTURNO : TARIFA_MINIMA;
+    if (precio_usd < minima) precio_usd = Math.round(minima * 100) / 100;
+    detalle_precio = `$0.50 base + $${precio_km.toFixed(2)}/km × ${distancia_km} km${noche ? ' (+20% nocturno)' : ''}`;
+  }
 
   const tasaInfo = await obtenerTasa();
   const tasa_bs = tasaInfo?.tasa_bs ?? null;
@@ -104,6 +123,8 @@ export async function POST(request: Request) {
   lines.push(`Servicio: ${servicio_label}`);
   if (direccion_origen) lines.push(`Origen: ${direccion_origen}`);
   if (direccion_destino) lines.push(`Destino: ${direccion_destino}`);
+  if (tarifaInterna) lines.push(`Tarifa: *Interna ${tarifaInterna.nombre}*${noche ? ' 🌙' : ''}`);
+  if (noche && !tarifaInterna) lines.push(`Tarifa: *Nocturna (+20%)* 🌙`);
   lines.push(`Distancia: ${distancia_km} km`);
   lines.push(`Tiempo: ~${tiempo_texto}`);
   lines.push(`Total USD: *$${precio_usd.toFixed(2)}*`);
@@ -125,6 +146,9 @@ export async function POST(request: Request) {
     tasa_bs,
     precio_km,
     tipo_servicio: servicio_label,
+    detalle_precio,
+    zona_interna: tarifaInterna?.nombre ?? null,
+    noche,
     whatsapp_text: lines.join('\n'),
     route_geometry,
   });

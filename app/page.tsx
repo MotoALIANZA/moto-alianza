@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ZONAS as ZONAS_GEO } from '@/lib/zonas';
+import { esNoche, horaCaracas, horaTextoCaracas } from '@/lib/horario';
 
 const WHATSAPP_NUMBER = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || '51999000000';
 const SHEET_URL = process.env.NEXT_PUBLIC_SHEET_URL || '';
@@ -15,6 +17,9 @@ type Cotizacion = {
   duracion_minutos: number;
   precio_km: number;
   tipo_servicio: string;
+  zona_interna?: string | null;
+  detalle_precio?: string;
+  noche?: boolean;
   whatsapp_text: string;
   route_geometry: any;
 };
@@ -24,6 +29,20 @@ function getL() {
 }
 
 export default function Home() {
+  if (process.env.NEXT_PUBLIC_SUSPENDED === '1') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#1c1913] px-6 text-center"
+        style={{ backgroundImage: 'url(/fondoMotoAlianza.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
+        <div className="absolute inset-0 bg-[#1c1913]/85" />
+        <div className="relative z-10 flex flex-col items-center">
+          <img src="/logo.jpg" alt="MOTOAL+ANZA" className="w-24 h-24 rounded-2xl object-cover ring-4 ring-[#ead189] shadow-xl mb-6" />
+          <h1 className="text-[#ead189] font-bold text-2xl mb-3">MOTOAL+ANZA</h1>
+          <p className="text-[#c9b07a] text-base max-w-xs leading-relaxed">Sitio suspendido temporalmente por mantenimiento</p>
+        </div>
+      </div>
+    );
+  }
+
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
   const markerOrigen = useRef<any>(null);
@@ -53,20 +72,30 @@ export default function Home() {
   const [clienteTelefono, setClienteTelefono] = useState('');
   const [online, setOnline] = useState(true);
   const [showZonas, setShowZonas] = useState(false);
+  const [zonaSeleccionada, setZonaSeleccionada] = useState<string | null>(null);
   const [zonasLoading, setZonasLoading] = useState<string | null>(null);
   const [showCliente, setShowCliente] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
+  const [noche, setNoche] = useState(esNoche());
+  const [horaActual, setHoraActual] = useState(horaTextoCaracas());
 
-  // Estado del servicio (6 AM - 3 AM)
+  // Estado del servicio (6 AM - 3 AM) + horario nocturno (desde 8:30 PM)
   const checkOnline = useCallback(() => {
-    const h = new Date().getHours();
+    const h = horaCaracas();
     setOnline(!(h >= 3 && h < 6));
+    setNoche(esNoche());
+    setHoraActual(horaTextoCaracas());
   }, []);
   useEffect(() => {
     checkOnline();
-    const id = setInterval(checkOnline, 60000);
+    const id = setInterval(checkOnline, 30000);
     return () => clearInterval(id);
   }, [checkOnline]);
+
+  // Tema oscuro nocturno
+  useEffect(() => {
+    document.body.classList.toggle('noche', noche);
+  }, [noche]);
 
   // Inicializar mapa
   useEffect(() => {
@@ -83,6 +112,19 @@ export default function Home() {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
     }).addTo(map);
 
+    // Polígonos de zonas internas
+    ZONAS_GEO.forEach((z: any) => {
+      z.poligonos.forEach((ring: [number, number][]) => {
+        L.polygon(ring.map(([lng, lat]) => [lat, lng]), {
+          color: '#c9a94e',
+          weight: 2,
+          opacity: 0.9,
+          fillColor: '#ead189',
+          fillOpacity: 0.15,
+        }).addTo(map).bindTooltip(z.nombre, { sticky: true });
+      });
+    });
+
     map.on('click', (e: any) => {
       const { lat, lng } = e.latlng;
       if (clickModeRef.current === 'origen') {
@@ -98,6 +140,7 @@ export default function Home() {
         setClickMode('origen');
         clickModeRef.current = 'origen';
       }
+      recalcularSiAmbos.current();
     });
 
     mapInstance.current = map;
@@ -128,9 +171,6 @@ export default function Home() {
   origeRef.current = origen;
   const destinRef = useRef(destino);
   destinRef.current = destino;
-
-  const cotActRef = useRef(cotizacionActiva);
-  cotActRef.current = cotizacionActiva;
 
   // Reverse Geocode ref
   const revTO = useRef<any>(null);
@@ -216,12 +256,27 @@ export default function Home() {
 
   // Auto-recalcular
   const fetchCotRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const recalcularSiAmbos = useRef<() => void>(() => {});
+  recalcularSiAmbos.current = () => {
+    if (origeRef.current && destinRef.current) {
+      setTimeout(fetchCotRef.current, 100);
+    }
+  };
   const autoRecalcularRef = useRef(() => {});
   autoRecalcularRef.current = () => {
-    if (cotActRef.current && origeRef.current && destinRef.current) {
+    if (origeRef.current && destinRef.current) {
       fetchCotRef.current();
     }
   };
+
+  // Recalcular al cruzar el umbral nocturno (8:30 PM) si hay ruta activa
+  const nocheAnteriorRef = useRef(noche);
+  useEffect(() => {
+    if (nocheAnteriorRef.current !== noche) {
+      nocheAnteriorRef.current = noche;
+      recalcularSiAmbos.current();
+    }
+  }, [noche]);
 
   // Autocomplete handlers
   const searchTO = useRef<any>(null);
@@ -250,7 +305,6 @@ export default function Home() {
   function selectAddress(item: any, type: 'origen' | 'destino') {
     const lat = parseFloat(item.lat);
     const lng = parseFloat(item.lon);
-    const willHaveBoth = type === 'origen' ? !!destinRef.current : !!origeRef.current;
     if (type === 'origen') {
       setOrigen({ lat, lng, address: item.display_name });
       setOrigenInput(item.display_name);
@@ -261,7 +315,7 @@ export default function Home() {
       setShowDestinoDD(false);
     }
     mapInstance.current?.setView([lat, lng], 16);
-    if (willHaveBoth) setTimeout(fetchCotizacion, 100);
+    recalcularSiAmbos.current();
   }
 
   // Geolocation
@@ -272,7 +326,6 @@ export default function Home() {
       (pos) => {
         setLocating(null);
         const { latitude: lat, longitude: lng } = pos.coords;
-        const willHaveBoth = target === 'origen' ? !!destinRef.current : !!origeRef.current;
         if (target === 'origen') {
           setOrigen({ lat, lng, address: 'Tu ubicación actual' });
           setOrigenInput('Tu ubicación actual');
@@ -283,7 +336,7 @@ export default function Home() {
           reverseGeocodeRef.current(lat, lng, 'destino');
         }
         mapInstance.current?.setView([lat, lng], 16);
-        if (willHaveBoth) setTimeout(fetchCotizacion, 100);
+        recalcularSiAmbos.current();
       },
       () => { setLocating(null); setError('No se pudo obtener tu ubicación.'); },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -291,7 +344,9 @@ export default function Home() {
   }
 
   // Calcular
+  const fetchSeq = useRef(0);
   const fetchCotizacion = async () => {
+    const seq = ++fetchSeq.current;
     setError('');
     if (!origen) { setError('Seleccioná un origen.'); return; }
     if (!destino) { setError('Seleccioná un destino.'); return; }
@@ -309,12 +364,13 @@ export default function Home() {
         }),
       });
       const data = await r.json();
+      if (seq !== fetchSeq.current) return;
       if (data.error) { setError(data.error); return; }
       setCotizacion(data);
       setCotizacionActiva(true);
       setTimeout(() => document.getElementById('resultado')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
-    } catch { setError('Error de conexión.'); }
-    finally { setLoading(false); }
+    } catch { if (seq === fetchSeq.current) setError('Error de conexión.'); }
+    finally { if (seq === fetchSeq.current) setLoading(false); }
   };
   fetchCotRef.current = fetchCotizacion;
 
@@ -332,6 +388,7 @@ export default function Home() {
 
   async function handleZonaClick(zona: string) {
     setZonasLoading(zona);
+    setZonaSeleccionada(zona);
     const queryMap: Record<string, string> = {
       'Ciudad Alianza': 'Ciudad Alianza, Guacara, Carabobo, Venezuela',
     };
@@ -343,7 +400,6 @@ export default function Home() {
       const { lat, lon, display_name } = data[0];
       const pt = { lat: parseFloat(lat), lng: parseFloat(lon), address: display_name };
       const target = clickModeRef.current;
-      const willHaveBoth = target === 'origen' ? !!destinRef.current : !!origeRef.current;
       if (target === 'origen') {
         setOrigen(pt);
         setOrigenInput(display_name);
@@ -356,7 +412,7 @@ export default function Home() {
         clickModeRef.current = 'origen';
       }
       mapInstance.current?.setView([parseFloat(lat), parseFloat(lon)], 15);
-      if (willHaveBoth) setTimeout(fetchCotizacion, 100);
+      recalcularSiAmbos.current();
     } catch {}
     setZonasLoading(null);
   }
@@ -390,6 +446,7 @@ export default function Home() {
         if (target === 'origen') { setOrigen(p); setOrigenInput(addr); setClickMode('destino'); clickModeRef.current = 'destino'; }
         else { setDestino(p); setDestinoInput(addr); setClickMode('origen'); clickModeRef.current = 'origen'; }
         mapInstance.current?.setView([lat, lng], 16);
+        recalcularSiAmbos.current();
       } else if (query) {
         handleSearchInput(query, target);
       }
@@ -437,9 +494,9 @@ export default function Home() {
           </div>
         </div>
       )}
-      <div className="max-w-md mx-auto px-4 py-4">
+      <div className={`max-w-md mx-auto px-4 py-4 transition-colors ${noche ? 'noche' : ''}`}>
       {/* Header */}
-      <div className="bg-[#1c1913] rounded-2xl px-4 py-3 mb-4 shadow-md">
+      <div className="bg-[#1c1913] rounded-2xl px-4 py-3 mb-4 shadow-[0_8px_24px_-10px_rgba(0,0,0,0.35)]">
         <div className="flex items-center gap-3">
           <img src="/logo.jpg" alt="MOTOAL+ANZA" className="w-10 h-10 rounded-lg object-cover ring-2 ring-[#ead189]" />
           <div className="flex-1">
@@ -448,29 +505,35 @@ export default function Home() {
             <p className={`text-[10px] mt-0.5 ${online ? 'text-green-400' : 'text-red-400'}`}>
               {online ? '🟢 En línea / Activos' : '🔴 Fuera de servicio'}
             </p>
+            {noche && (
+              <p className="text-[10px] mt-0.5 text-[#ead189] font-semibold">
+                🌙 Tarifas nocturnas activas · {horaActual}
+              </p>
+            )}
           </div>
         </div>
       </div>
 
       {!online && (
-        <div className="mb-3 p-3 bg-red-50/90 border border-red-300 rounded-xl text-sm text-red-700 text-center">
+        <div className={`mb-3 p-3 rounded-xl text-sm text-center ${noche ? 'bg-red-950/60 border border-red-800 text-red-300' : 'bg-red-50/90 border border-red-300 text-red-700'}`}>
           🔴 Déjanos tu cotización y te agendamos para primera hora de la mañana
         </div>
       )}
       {/* Mapa */}
-      <div ref={mapRef} className="h-[240px] w-full rounded-xl shadow-md mb-3 ring-1 ring-black/5"></div>
+      <div ref={mapRef} className="h-[240px] w-full rounded-xl shadow-[0_8px_24px_-10px_rgba(0,0,0,0.35)] mb-3 ring-1 ring-black/5"></div>
 
-      {error && <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">{error}</div>}
+      {error && <div className={`mb-3 p-3 rounded-xl text-sm ${noche ? 'bg-red-950/60 border border-red-800 text-red-300' : 'bg-red-50 border border-red-200 text-red-700'}`}>{error}</div>}
 
       {/* Origen */}
       <div className="relative mb-2.5">
-        <label className={`block text-xs font-semibold mb-1 ml-1 ${origen ? 'text-green-300' : 'text-white/80'}`}>📍 ORIGEN {origen && '✅'}</label>
+        <label className={`block text-xs font-semibold mb-1 ml-1 ${origen ? 'text-green-300' : 'text-white/80'}`}>
+          <PinIcon className="w-3.5 h-3.5 -mt-0.5 text-[#c9a94e] mr-1" /> ORIGEN {origen && '✅'}</label>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <div className="relative">
               <input type="text" value={origenInput} onChange={(e) => handleSearchInput(e.target.value, 'origen')}
                 placeholder="Buscar dirección o toca el mapa..."
-                className={`w-full p-2.5 border rounded-xl outline-none text-sm focus:border-[#c9a94e] focus:ring-3 focus:ring-[#ead189]/30 bg-white transition-all ${origen ? 'border-green-400' : 'border-gray-300'}`} />
+                className={`w-full p-2.5 border rounded-xl outline-none text-sm focus:border-[#c9a94e] focus:ring-3 focus:ring-[#ead189]/30 transition-all ${noche ? 'bg-[#1c1913] border-[#3a2f1d] text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300'} ${origen ? 'border-green-400' : ''}`} />
               {searchingOrigen && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#c9a94e] animate-pulse">⏳</span>}
               {origenInput && !searchingOrigen && (
                 <button onClick={() => { setOrigen(null); setOrigenInput(''); setShowOrigenDD(false); setClickMode('origen'); clickModeRef.current = 'origen'; }}
@@ -480,7 +543,7 @@ export default function Home() {
             </div>
           </div>
           <button onClick={() => setCurrentLocation('origen')} className="btn-location relative" disabled={locating === 'origen'}>
-            {locating === 'origen' ? <span className="inline-block animate-spin">⏳</span> : '📍'} Actual
+            {locating === 'origen' ? <span className="inline-block animate-spin">⏳</span> : <PinIcon className="w-4 h-4 text-gray-500" />} Actual
           </button>
           <button onClick={() => handlePasteMaps('origen')} className="btn-location" title="Pegar link de Google Maps">🔗 Maps</button>
         </div>
@@ -488,13 +551,14 @@ export default function Home() {
 
       {/* Destino */}
       <div className="relative mb-3">
-        <label className={`block text-xs font-semibold mb-1 ml-1 ${destino ? 'text-green-300' : 'text-white/80'}`}>🏁 DESTINO {destino && '✅'}</label>
+        <label className={`block text-xs font-semibold mb-1 ml-1 ${destino ? 'text-green-300' : 'text-white/80'}`}>
+          <PinIcon className="w-3.5 h-3.5 -mt-0.5 text-[#c9a94e] mr-1" /> DESTINO {destino && '✅'}</label>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <div className="relative">
               <input type="text" value={destinoInput} onChange={(e) => handleSearchInput(e.target.value, 'destino')}
                 placeholder="Buscar dirección o toca el mapa..."
-                className={`w-full p-2.5 border rounded-xl outline-none text-sm focus:border-[#c9a94e] focus:ring-3 focus:ring-[#ead189]/30 bg-white transition-all ${destino ? 'border-green-400' : 'border-gray-300'}`} />
+                className={`w-full p-2.5 border rounded-xl outline-none text-sm focus:border-[#c9a94e] focus:ring-3 focus:ring-[#ead189]/30 transition-all ${noche ? 'bg-[#1c1913] border-[#3a2f1d] text-gray-100 placeholder-gray-500' : 'bg-white border-gray-300'} ${destino ? 'border-green-400' : ''}`} />
               {searchingDestino && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[#c9a94e] animate-pulse">⏳</span>}
               {destinoInput && !searchingDestino && (
                 <button onClick={() => { setDestino(null); setDestinoInput(''); setShowDestinoDD(false); setClickMode('destino'); clickModeRef.current = 'destino'; }}
@@ -504,7 +568,7 @@ export default function Home() {
             </div>
           </div>
           <button onClick={() => setCurrentLocation('destino')} className="btn-location relative" disabled={locating === 'destino'}>
-            {locating === 'destino' ? <span className="inline-block animate-spin">⏳</span> : '📍'} Actual
+            {locating === 'destino' ? <span className="inline-block animate-spin">⏳</span> : <PinIcon className="w-4 h-4 text-gray-500" />} Actual
           </button>
           <button onClick={() => handlePasteMaps('destino')} className="btn-location" title="Pegar link de Google Maps">🔗 Maps</button>
         </div>
@@ -520,7 +584,7 @@ export default function Home() {
             { v: 'encomienda', l: '📮 Encomienda', r: '$0.50/km' },
           ].map((s) => (
             <button key={s.v} onClick={() => handleServicioChange(s.v)}
-              className={`rounded-xl py-2.5 text-xs font-medium border-2 transition-all ${servicio === s.v ? 'bg-[#ead189] border-[#c9a94e] text-[#1c1913] font-bold' : 'bg-white border-gray-200 text-gray-500'}`}>
+              className={`rounded-xl py-2.5 text-xs font-medium border-2 transition-all ${servicio === s.v ? 'bg-[#ead189] border-[#c9a94e] text-gray-900 font-bold' : noche ? 'bg-[#1c1913] border-[#3a2f1d] text-gray-400' : 'bg-white border-gray-200 text-gray-500'}`}>
               {s.l}<br /><span className="text-[10px] opacity-70">{s.r}</span>
             </button>
           ))}
@@ -528,47 +592,50 @@ export default function Home() {
       </div>
 
       {/* Zonas rápidas */}
-      <div className="mb-3 border border-[#ead189]/40 rounded-xl overflow-hidden bg-white/95 backdrop-blur-sm">
+      <div className={`mb-3 border rounded-xl overflow-hidden backdrop-blur-sm shadow-[0_8px_24px_-10px_rgba(0,0,0,0.35)] ${noche ? 'bg-[#15110c] border-[#3a2f1d]' : 'bg-white/95 border-[#ead189]/40'}`}>
         <button onClick={() => setShowZonas(!showZonas)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-[#1c1913] hover:bg-[#f5e8b8]/30 transition-colors">
-          <span>📍 Zonas rápidas — {clickMode === 'origen' ? 'elegir ORIGEN' : 'elegir DESTINO'}</span>
-          <span className="text-[#4a3822]">{showZonas ? '▲' : '▼'}</span>
+          className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold transition-colors ${noche ? 'text-[#ead189] hover:text-[#c9a94e]' : 'text-[#1c1913] hover:bg-[#f5e8b8]/30'}`}>
+          <PinIcon className="w-4 h-4 -mt-0.5 text-[#c9a94e] mr-1" /> Zonas rápidas — {clickMode === 'origen' ? 'elegir ORIGEN' : 'elegir DESTINO'}
+          <span className={noche ? 'text-[#c9a94e]' : 'text-[#4a3822]'}>{showZonas ? '▲' : '▼'}</span>
         </button>
         {showZonas && (
-          <div className="px-4 pb-4 pt-1 border-t border-[#ead189]/40">
-            <p className="text-[10px] text-[#4a3822] mb-2">Tocá una zona para usarla como <strong>{clickMode === 'origen' ? 'ORIGEN' : 'DESTINO'}</strong></p>
+          <div className={`px-4 pb-4 pt-1 border-t ${noche ? 'border-[#3a2f1d]' : 'border-[#ead189]/40'}`}>
+            <p className={`text-[10px] mb-2 ${noche ? 'text-[#c9b07a]' : 'text-[#4a3822]'}`}>Tocá una zona para usarla como <strong>{clickMode === 'origen' ? 'ORIGEN' : 'DESTINO'}</strong></p>
             <div className="flex flex-wrap gap-1.5">
-              {ZONAS.map((z) => (
-                <button key={z} onClick={() => handleZonaClick(z)} disabled={zonasLoading === z}
-                  className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#c9a94e]/40 bg-white text-[#1c1913] hover:bg-[#ead189]/30 transition-all disabled:opacity-50">
-                  {zonasLoading === z ? '⌛' : '📍'} {z}
-                </button>
-              ))}
+              {ZONAS.map((z) => {
+                const activa = zonaSeleccionada === z && !zonasLoading;
+                return (
+                  <button key={z} onClick={() => handleZonaClick(z)} disabled={zonasLoading === z}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all disabled:opacity-50 ${activa ? 'bg-[#ead189] text-gray-900 font-semibold shadow-sm' : noche ? 'bg-[#241d13] text-gray-300 hover:bg-[#2e2516]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+                    {zonasLoading === z ? <span className="inline-block animate-spin">⏳</span> : <PinIcon className={`w-3 h-3 -mt-px mr-1 ${noche ? 'text-[#c9a94e]' : 'text-gray-500'}`} />} {z}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
       </div>
 
       {/* Cliente */}
-      <div className="mb-3 border border-[#ead189]/40 rounded-xl overflow-hidden bg-white">
+      <div className={`mb-3 border rounded-xl overflow-hidden shadow-[0_8px_24px_-10px_rgba(0,0,0,0.35)] ${noche ? 'bg-[#15110c] border-[#3a2f1d]' : 'bg-white border-[#ead189]/40'}`}>
         <button onClick={() => setShowCliente(!showCliente)}
-          className="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-[#1c1913] hover:bg-[#f5e8b8]/30 transition-colors">
+          className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold transition-colors ${noche ? 'text-[#ead189] hover:text-[#c9a94e]' : 'text-[#1c1913] hover:bg-[#f5e8b8]/30'}`}>
           <span>👤 Datos del cliente <span className="text-[10px] text-red-400 font-normal">* obligatorio</span></span>
-          <span className="text-[#4a3822]">{showCliente ? '▲' : '▼'}</span>
+          <span className={noche ? 'text-[#c9a94e]' : 'text-[#4a3822]'}>{showCliente ? '▲' : '▼'}</span>
         </button>
         {showCliente && (
-          <div className="px-4 pb-4 pt-1 border-t border-[#ead189]/40">
-            <div className="mb-2.5">
-              <label className="block text-xs text-[#4a3822] mb-1">Nombre completo</label>
+          <div className={`px-5 pb-5 pt-2 border-t ${noche ? 'border-[#3a2f1d]' : 'border-[#ead189]/40'}`}>
+            <div className="mb-4">
+              <label className={`block text-xs mb-1.5 ${noche ? 'text-[#c9b07a]' : 'text-[#4a3822]'}`}>Nombre completo</label>
               <input type="text" value={clienteNombre} onChange={(e) => setClienteNombre(e.target.value)}
                 placeholder="Ej: Juan Pérez"
-                className="w-full p-2.5 border border-gray-300 rounded-xl outline-none text-sm focus:border-[#c9a94e] focus:ring-3 focus:ring-[#ead189]/30 bg-white transition-all" />
+                className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${noche ? 'bg-[#1c1913] border-[#3a2f1d] text-gray-100 placeholder-gray-500 focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/20' : 'bg-gray-50 border-gray-300 focus:bg-white focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/30'}`} />
             </div>
-            <div className="mb-2.5">
-              <label className="block text-xs text-[#4a3822] mb-1">Teléfono de contacto</label>
+            <div>
+              <label className={`block text-xs mb-1.5 ${noche ? 'text-[#c9b07a]' : 'text-[#4a3822]'}`}>Teléfono de contacto</label>
               <input type="tel" value={clienteTelefono} onChange={(e) => setClienteTelefono(e.target.value)}
                 placeholder="Ej: 0412-1234567"
-                className="w-full p-2.5 border border-gray-300 rounded-xl outline-none text-sm focus:border-[#c9a94e] focus:ring-3 focus:ring-[#ead189]/30 bg-white transition-all" />
+                className={`w-full p-3 border rounded-xl outline-none text-sm transition-all ${noche ? 'bg-[#1c1913] border-[#3a2f1d] text-gray-100 placeholder-gray-500 focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/20' : 'bg-gray-50 border-gray-300 focus:bg-white focus:border-yellow-400 focus:ring-4 focus:ring-yellow-400/30'}`} />
             </div>
           </div>
         )}
@@ -584,7 +651,7 @@ export default function Home() {
             { v: 'efectivo_bs', l: '💵 Efectivo (Bs.)' },
           ].map((p) => (
             <button key={p.v} onClick={() => setMetodoPago(p.v)}
-              className={`rounded-xl py-2.5 text-xs font-medium border-2 transition-all ${metodoPago === p.v ? 'bg-[#1c1913] border-[#1c1913] text-[#ead189] font-bold' : 'bg-white border-gray-200 text-gray-500'}`}>
+              className={`rounded-xl py-2.5 text-xs font-medium border-2 transition-all ${metodoPago === p.v ? 'bg-[#1c1913] border-[#1c1913] text-[#ead189] font-bold' : noche ? 'bg-[#1c1913] border-[#3a2f1d] text-gray-400' : 'bg-white border-gray-200 text-gray-500'}`}>
               {p.l}
             </button>
           ))}
@@ -593,19 +660,29 @@ export default function Home() {
 
       {/* Calcular */}
       <button onClick={fetchCotizacion} disabled={loading}
-        className="w-full py-3.5 rounded-xl font-bold text-base shadow-md mb-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        className="w-full py-3.5 rounded-xl font-bold text-base shadow-[0_8px_24px_-10px_rgba(0,0,0,0.35)] mb-3 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         style={{ backgroundColor: '#ead189', color: '#1c1913' }}>
         {loading ? 'Calculando...' : 'Calcular Tarifa'}
       </button>
 
       {/* Resultado */}
       {cotizacion && (
-        <div id="resultado" className="bg-gradient-to-br from-[#6b7280] to-white border border-[#ead189] rounded-2xl p-5 text-center shadow-md">
-          <p className="text-[#4a3822] text-xs uppercase tracking-wider mb-1">Tu cotización</p>
-          <div className="text-3xl font-bold text-[#1c1913] mb-1">${cotizacion.precio_usd.toFixed(2)}</div>
-          {cotizacion.precio_bs != null && <div className="text-lg font-semibold text-[#4a3822] mb-1">Bs. {formatBs(cotizacion.precio_bs)}</div>}
-          <div className="text-[11px] text-[#6b5a3e] mb-2">$0.50 base + ${cotizacion.precio_km.toFixed(2)}/km × {cotizacion.distancia_km} km = ${cotizacion.precio_usd.toFixed(2)}</div>
-          <div className="flex justify-center gap-4 text-sm text-[#4a3822] mb-3">
+        <div id="resultado" className={`rounded-2xl p-5 text-center shadow-[0_8px_24px_-10px_rgba(0,0,0,0.35)] border ${noche ? 'bg-gradient-to-br from-[#1c1913] to-[#2e2417] border-[#c9a94e]' : 'bg-gradient-to-br from-[#6b7280] to-white border-[#ead189]'}`}>
+          <p className={`text-xs uppercase tracking-wider mb-1 ${noche ? 'text-[#c9b07a]' : 'text-[#4a3822]'}`}>Tu cotización</p>
+          <div className={`text-3xl font-bold mb-1 ${noche ? 'text-[#ead189]' : 'text-[#1c1913]'}`}>${cotizacion.precio_usd.toFixed(2)}</div>
+          {cotizacion.precio_bs != null && <div className={`text-lg font-semibold mb-1 ${noche ? 'text-[#c9b07a]' : 'text-[#4a3822]'}`}>Bs. {formatBs(cotizacion.precio_bs)}</div>}
+          {cotizacion.zona_interna && (
+            <div className="inline-block mb-2 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#ead189] text-gray-900">
+              🏠 Tarifa interna {cotizacion.zona_interna}
+            </div>
+          )}
+          {cotizacion.noche && (
+            <div className="inline-block mb-2 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#1c1913] text-[#ead189] border border-[#c9a94e] ml-1">
+              🌙 Noche
+            </div>
+          )}
+          <div className={`text-[11px] mb-2 ${noche ? 'text-[#c9b07a]' : 'text-[#6b5a3e]'}`}>{cotizacion.detalle_precio || `$0.50 base + $${cotizacion.precio_km.toFixed(2)}/km × ${cotizacion.distancia_km} km`}</div>
+          <div className={`flex justify-center gap-4 text-sm mb-3 ${noche ? 'text-[#c9b07a]' : 'text-[#4a3822]'}`}>
             <span>📏 {cotizacion.distancia_km} km</span>
             <span>⏱ {formatTiempo(cotizacion.duracion_minutos)}</span>
             <span>{cotizacion.tipo_servicio}</span>
@@ -616,13 +693,13 @@ export default function Home() {
             💬 Confirmar y Solicitar por WhatsApp
           </a>
           <button onClick={compartirTarifa}
-            className="w-full mt-2 py-2 rounded-xl font-medium text-xs border border-[#c9a94e] text-[#1c1913] bg-white/80 hover:bg-[#ead189]/20 transition-all">
+            className={`w-full mt-2 py-2 rounded-xl font-medium text-xs border transition-all ${noche ? 'border-[#c9a94e] text-[#ead189] bg-[#1c1913]/60 hover:bg-[#ead189]/10' : 'border-[#c9a94e] text-[#1c1913] bg-white/80 hover:bg-[#ead189]/20'}`}>
             {copied ? '✅ ¡Copiado!' : '📋 Compartir tarifa'}
           </button>
         </div>
       )}
 
-      <p className="text-center text-xs text-white/60 mt-3">Tocá el mapa para marcar • Arrastrá los marcadores</p>
+      <p className={`text-center text-xs mt-3 ${noche ? 'text-white/40' : 'text-white/60'}`}>Tocá el mapa para marcar • Arrastrá los marcadores</p>
 
       <style jsx>{`
         .btn-location {
@@ -632,17 +709,31 @@ export default function Home() {
         }
         .btn-location:hover { border-color: #c9a94e; background: #f5e8b8; color: #1c1913; }
         .btn-location:disabled { opacity: 0.6; cursor: not-allowed; }
+        .noche .btn-location {
+          background: #1c1913; border-color: #3a2f1d; color: #c9b07a;
+        }
+        .noche .btn-location:hover { border-color: #c9a94e; background: #2e2516; color: #ead189; }
+        .noche .btn-location:disabled { opacity: 0.6; cursor: not-allowed; }
       `}</style>
     </div>
     </>
   );
 }
 
-function Dropdown({ items, onSelect }: { items: any[]; onSelect: (item: any) => void }) {
+function PinIcon({ className = '' }: { className?: string }) {
   return (
-    <div className="absolute left-0 right-0 bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto z-50">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={`inline-block ${className}`}>
+      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+    </svg>
+  );
+}
+
+function Dropdown({ items, onSelect }: { items: any[]; onSelect: (item: any) => void }) {
+  const noche = typeof document !== 'undefined' && document.body.classList.contains('noche');
+  return (
+    <div className={`absolute left-0 right-0 border rounded-xl shadow-lg max-h-40 overflow-y-auto z-50 ${noche ? 'bg-[#1c1913] border-[#3a2f1d]' : 'bg-white border-gray-200'}`}>
       {items.map((item, i) => (
-        <div key={i} className="px-4 py-2.5 text-sm cursor-pointer hover:bg-[#f5e8b8] border-b border-gray-100 last:border-0"
+        <div key={i} className={`px-4 py-2.5 text-sm cursor-pointer border-b last:border-0 ${noche ? 'hover:bg-[#2e2516] text-gray-200 border-[#2a2214]' : 'hover:bg-[#f5e8b8] text-inherit border-gray-100'}`}
           onClick={() => onSelect(item)}>
           {item.display_name}
         </div>
