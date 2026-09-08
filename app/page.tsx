@@ -71,9 +71,6 @@ export default function Home() {
   const [clienteNombre, setClienteNombre] = useState('');
   const [clienteTelefono, setClienteTelefono] = useState('');
   const [online, setOnline] = useState(true);
-  const [showZonas, setShowZonas] = useState(false);
-  const [zonaSeleccionada, setZonaSeleccionada] = useState<string | null>(null);
-  const [zonasLoading, setZonasLoading] = useState<string | null>(null);
   const [showCliente, setShowCliente] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [noche, setNoche] = useState(esNoche());
@@ -397,44 +394,6 @@ export default function Home() {
     if (cotizacionActiva && origen && destino) setTimeout(fetchCotizacion, 0);
   }
 
-  const ZONAS = [
-    'Naguanagua', 'San Diego', 'El Trigal', 'La Viña', 'Prebo',
-    'Centro de Valencia', 'La Isabelica', 'Mañongo', 'Camoruco',
-    'Ciudad Alianza', 'Guacara', 'Los Guayos',
-  ];
-
-  async function handleZonaClick(zona: string) {
-    setZonasLoading(zona);
-    setZonaSeleccionada(zona);
-    const queryMap: Record<string, string> = {
-      'Ciudad Alianza': 'Ciudad Alianza, Guacara, Carabobo, Venezuela',
-    };
-    const q = queryMap[zona] || `${zona}, Valencia, Venezuela`;
-    try {
-      const r = await fetch(`${NOMINATIM_URL}/search?q=${encodeURIComponent(q)}&format=json&limit=1`);
-      const data = await r.json();
-      if (!data.length) return;
-      const { lat, lon, display_name } = data[0];
-      const pt = { lat: parseFloat(lat), lng: parseFloat(lon), address: display_name };
-      const target = clickModeRef.current;
-      if (target === 'origen') {
-        setOrigen(pt);
-        setOrigenInput(display_name);
-        setClickMode('destino');
-        clickModeRef.current = 'destino';
-      } else {
-        setDestino(pt);
-        setDestinoInput(display_name);
-        setClickMode('origen');
-        clickModeRef.current = 'origen';
-      }
-      mapInstance.current?.setView([parseFloat(lat), parseFloat(lon)], 15);
-      limpiarCotizacion();
-      recalcularSiAmbos.current();
-    } catch {}
-    setZonasLoading(null);
-  }
-
   function formatBs(n: number) {
     return n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
@@ -610,30 +569,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Zonas rápidas */}
-      <div className={`mb-3 border rounded-xl overflow-hidden backdrop-blur-sm shadow-[0_8px_24px_-10px_rgba(0,0,0,0.35)] ${noche ? 'bg-[#15110c] border-[#3a2f1d]' : 'bg-white/95 border-[#ead189]/40'}`}>
-        <button onClick={() => setShowZonas(!showZonas)}
-          className={`w-full flex items-center justify-between px-4 py-3 text-sm font-semibold transition-colors ${noche ? 'text-[#ead189] hover:text-[#c9a94e]' : 'text-[#1c1913] hover:bg-[#f5e8b8]/30'}`}>
-          <PinIcon className="w-4 h-4 -mt-0.5 text-[#c9a94e] mr-1" /> Zonas rápidas — {clickMode === 'origen' ? 'elegir ORIGEN' : 'elegir DESTINO'}
-          <span className={noche ? 'text-[#c9a94e]' : 'text-[#4a3822]'}>{showZonas ? '▲' : '▼'}</span>
-        </button>
-        {showZonas && (
-          <div className={`px-4 pb-4 pt-1 border-t ${noche ? 'border-[#3a2f1d]' : 'border-[#ead189]/40'}`}>
-            <p className={`text-[10px] mb-2 ${noche ? 'text-[#c9b07a]' : 'text-[#4a3822]'}`}>Tocá una zona para usarla como <strong>{clickMode === 'origen' ? 'ORIGEN' : 'DESTINO'}</strong></p>
-            <div className="flex flex-wrap gap-1.5">
-              {ZONAS.map((z) => {
-                const activa = zonaSeleccionada === z && !zonasLoading;
-                return (
-                  <button key={z} onClick={() => handleZonaClick(z)} disabled={zonasLoading === z}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all disabled:opacity-50 ${activa ? 'bg-[#ead189] text-gray-900 font-semibold shadow-sm' : noche ? 'bg-[#241d13] text-gray-300 hover:bg-[#2e2516]' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-                    {zonasLoading === z ? <span className="inline-block animate-spin">⏳</span> : <PinIcon className={`w-3 h-3 -mt-px mr-1 ${noche ? 'text-[#c9a94e]' : 'text-gray-500'}`} />} {z}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
+
 
       {/* Cliente */}
       <div className={`mb-3 border rounded-xl overflow-hidden shadow-[0_8px_24px_-10px_rgba(0,0,0,0.35)] ${noche ? 'bg-[#15110c] border-[#3a2f1d]' : 'bg-white border-[#ead189]/40'}`}>
