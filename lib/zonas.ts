@@ -15,8 +15,8 @@ export const ZONAS: Zona[] = [
   {
     id: 'la_isabelica',
     nombre: 'La Isabelica',
-    tarifa_interna: 1.9,
-    tarifa_interna_noche: 2.5,
+    tarifa_interna: 1.95,
+    tarifa_interna_noche: 2.55,
     poligonos: [[
       [-67.996857, 10.159758],
       [-67.996857, 10.164321],
@@ -35,8 +35,8 @@ export const ZONAS: Zona[] = [
   {
     id: 'ciudad_alianza',
     nombre: 'Ciudad Alianza',
-    tarifa_interna: 1.7,
-    tarifa_interna_noche: 2,
+    tarifa_interna: 1.75,
+    tarifa_interna_noche: 2.05,
     poligonos: [[
       [-67.909309, 10.206560],
       [-67.901070, 10.214162],

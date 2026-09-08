@@ -598,9 +598,9 @@ export default function Home() {
         <label className="block text-xs font-semibold text-white/80 mb-1.5 ml-1">🛵 TIPO DE SERVICIO</label>
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { v: 'moto', l: '🛵 Mototaxi', r: '$0.30/km' },
-            { v: 'delivery', l: '📦 Delivery', r: '$0.25/km' },
-            { v: 'encomienda', l: '📮 Encomienda', r: '$0.50/km' },
+            { v: 'moto', l: '🛵 Mototaxi', r: '$0.35/km' },
+            { v: 'delivery', l: '📦 Delivery', r: '$0.30/km' },
+            { v: 'encomienda', l: '📮 Encomienda', r: '$0.55/km' },
           ].map((s) => (
             <button key={s.v} onClick={() => handleServicioChange(s.v)}
               className={`rounded-xl py-2.5 text-xs font-medium border-2 transition-all ${servicio === s.v ? 'bg-[#ead189] border-[#c9a94e] text-gray-900 font-bold' : noche ? 'bg-[#1c1913] border-[#3a2f1d] text-gray-400' : 'bg-white border-gray-200 text-gray-500'}`}>

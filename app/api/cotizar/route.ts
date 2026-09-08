@@ -3,12 +3,12 @@ import { obtenerTarifaInterna } from '@/lib/zonas';
 import { esNoche } from '@/lib/horario';
 
 const PRECIO_POR_KM: Record<string, number> = {
-  moto: 0.30,
-  delivery: 0.25,
-  encomienda: 0.50,
+  moto: 0.35,
+  delivery: 0.30,
+  encomienda: 0.55,
 };
 
-const TARIFA_MINIMA = 1.7;      // mínima general diurna
+const TARIFA_MINIMA = 1.75;      // mínima general diurna
 const FACTOR_NOCTURNO = 1.2;    // +20% en horario nocturno
 
 const SERVICE_LABELS: Record<string, string> = {
