@@ -210,10 +210,14 @@ export default function Home() {
       }).addTo(map);
       markerOrigen.current.on('dragend', () => {
         const p = markerOrigen.current.getLatLng();
-        setOrigen({ lat: p.lat, lng: p.lng, address: origen.address });
+        const newOrigen = { lat: p.lat, lng: p.lng, address: origen?.address || `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}` };
+        setOrigen(newOrigen);
+        origeRef.current = newOrigen;
         reverseGeocodeRef.current(p.lat, p.lng, 'origen');
         limpiarCotizacion();
-        autoRecalcularRef.current();
+        if (destinRef.current) {
+          fetchCotRef.current();
+        }
       });
     }
 
@@ -227,10 +231,14 @@ export default function Home() {
       }).addTo(map);
       markerDestino.current.on('dragend', () => {
         const p = markerDestino.current.getLatLng();
-        setDestino({ lat: p.lat, lng: p.lng, address: destino.address });
+        const newDestino = { lat: p.lat, lng: p.lng, address: destino?.address || `${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}` };
+        setDestino(newDestino);
+        destinRef.current = newDestino;
         reverseGeocodeRef.current(p.lat, p.lng, 'destino');
         limpiarCotizacion();
-        autoRecalcularRef.current();
+        if (origeRef.current) {
+          fetchCotRef.current();
+        }
       });
     }
 
