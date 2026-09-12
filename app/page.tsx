@@ -125,13 +125,17 @@ export default function Home() {
     map.on('click', (e: any) => {
       const { lat, lng } = e.latlng;
       if (clickModeRef.current === 'origen') {
-        setOrigen({ lat, lng, address: `${lat.toFixed(4)}, ${lng.toFixed(4)}` });
+        const pt = { lat, lng, address: `${lat.toFixed(4)}, ${lng.toFixed(4)}` };
+        setOrigen(pt);
+        origeRef.current = pt;
         setOrigenInput(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
         reverseGeocodeRef.current(lat, lng, 'origen');
         setClickMode('destino');
         clickModeRef.current = 'destino';
       } else {
-        setDestino({ lat, lng, address: `${lat.toFixed(4)}, ${lng.toFixed(4)}` });
+        const pt = { lat, lng, address: `${lat.toFixed(4)}, ${lng.toFixed(4)}` };
+        setDestino(pt);
+        destinRef.current = pt;
         setDestinoInput(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
         reverseGeocodeRef.current(lat, lng, 'destino');
         setClickMode('origen');
@@ -370,8 +374,10 @@ export default function Home() {
   const fetchCotizacion = async () => {
     const seq = ++fetchSeq.current;
     setError('');
-    if (!origen) { setError('Seleccioná un origen.'); return; }
-    if (!destino) { setError('Seleccioná un destino.'); return; }
+    const o = origeRef.current;
+    const d = destinRef.current;
+    if (!o) { setError('Seleccioná un origen.'); return; }
+    if (!d) { setError('Seleccioná un destino.'); return; }
     setLoading(true);
 
     const attempt = async (retriesLeft: number): Promise<any> => {
@@ -380,8 +386,8 @@ export default function Home() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            lat_origen: origen.lat, lon_origen: origen.lng,
-            lat_destino: destino.lat, lon_destino: destino.lng,
+            lat_origen: o.lat, lon_origen: o.lng,
+            lat_destino: d.lat, lon_destino: d.lng,
             tipo_servicio: servicioRef.current, nombre: clienteNombre,
             telefono: clienteTelefono, metodo_pago: metodoPago,
             direccion_origen: origenInput, direccion_destino: destinoInput,
