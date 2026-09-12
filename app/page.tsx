@@ -565,8 +565,8 @@ export default function Home() {
         <label className="block text-xs font-semibold text-white/80 mb-1.5 ml-1">🛵 TIPO DE SERVICIO</label>
         <div className="grid grid-cols-3 gap-1.5">
           {[
-            { v: 'moto', l: '🛵 Mototaxi', r: '$0.35/km' },
-            { v: 'delivery', l: '📦 Delivery', r: '$0.30/km' },
+            { v: 'moto', l: '🛵 Mototaxi', r: '$0.45/km' },
+            { v: 'delivery', l: '📦 Delivery', r: '$0.45/km' },
             { v: 'encomienda', l: '📮 Encomienda', r: '$0.55/km' },
           ].map((s) => (
             <button key={s.v} onClick={() => handleServicioChange(s.v)}

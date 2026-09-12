@@ -3,8 +3,8 @@ import { obtenerTarifaInterna } from '@/lib/zonas';
 import { esNoche } from '@/lib/horario';
 
 const PRECIO_POR_KM: Record<string, number> = {
-  moto: 0.35,
-  delivery: 0.30,
+  moto: 0.45,
+  delivery: 0.45,
   encomienda: 0.55,
 };
 
