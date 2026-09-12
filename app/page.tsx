@@ -373,26 +373,56 @@ export default function Home() {
     if (!origen) { setError('Seleccioná un origen.'); return; }
     if (!destino) { setError('Seleccioná un destino.'); return; }
     setLoading(true);
+
+    const attempt = async (retriesLeft: number): Promise<any> => {
+      try {
+        const r = await fetch('/api/cotizar/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lat_origen: origen.lat, lon_origen: origen.lng,
+            lat_destino: destino.lat, lon_destino: destino.lng,
+            tipo_servicio: servicioRef.current, nombre: clienteNombre,
+            telefono: clienteTelefono, metodo_pago: metodoPago,
+            direccion_origen: origenInput, direccion_destino: destinoInput,
+          }),
+        });
+        const data = await r.json();
+        if (data.error && retriesLeft > 0) {
+          await new Promise((res) => setTimeout(res, 1000));
+          return attempt(retriesLeft - 1);
+        }
+        return data;
+      } catch (err) {
+        if (retriesLeft > 0) {
+          await new Promise((res) => setTimeout(res, 1000));
+          return attempt(retriesLeft - 1);
+        }
+        throw err;
+      }
+    };
+
     try {
-      const r = await fetch('/api/cotizar/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lat_origen: origen.lat, lon_origen: origen.lng,
-          lat_destino: destino.lat, lon_destino: destino.lng,
-          tipo_servicio: servicioRef.current, nombre: clienteNombre,
-          telefono: clienteTelefono, metodo_pago: metodoPago,
-          direccion_origen: origenInput, direccion_destino: destinoInput,
-        }),
-      });
-      const data = await r.json();
+      const data = await attempt(1);
       if (seq !== fetchSeq.current) return;
-      if (data.error) { setError(data.error); return; }
+      if (data.error) {
+        setError(data.error);
+        if (data.error.includes('ruta') || data.error.includes('Error')) {
+          setTimeout(() => window.location.reload(), 1500);
+        }
+        return;
+      }
       setCotizacion(data);
       setCotizacionActiva(true);
       setTimeout(() => document.getElementById('resultado')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
-    } catch { if (seq === fetchSeq.current) setError('Error de conexión.'); }
-    finally { if (seq === fetchSeq.current) setLoading(false); }
+    } catch {
+      if (seq === fetchSeq.current) {
+        setError('Error de conexión. Reiniciando...');
+        setTimeout(() => window.location.reload(), 1500);
+      }
+    } finally {
+      if (seq === fetchSeq.current) setLoading(false);
+    }
   };
   fetchCotRef.current = fetchCotizacion;
 
